@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HP Printer Image Fetcher</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="header-copy">
+        <p class="eyebrow">HP Product Images</p>
+        <h1>Printer Image Fetcher</h1>
+        <p class="subtitle">
+          Upload an Excel list of HP printer product numbers and retrieve official product images
+          from the HP Catalog Service API and HP Shop.
+        </p>
+      </div>
+      <div class="status-pill" id="apiStatus">Checking API status...</div>
+    </header>
+
+    <main class="layout">
+      <section class="panel upload-panel">
+        <h2>Upload product list</h2>
+        <p class="panel-help">
+          Excel file with a <strong>Product Number</strong> column, or product numbers in the first column.
+        </p>
+
+        <label class="dropzone" id="dropzone" for="excelInput">
+          <input type="file" id="excelInput" accept=".xlsx,.xlsm" hidden />
+          <div class="dropzone-icon">📄</div>
+          <p class="dropzone-title">Drop your Excel file here</p>
+          <p class="dropzone-subtitle">or click to browse (.xlsx)</p>
+          <p class="dropzone-file" id="selectedFile">No file selected</p>
+        </label>
+
+        <div class="manual-entry">
+          <label for="manualProducts">Or paste product numbers (one per line)</label>
+          <textarea id="manualProducts" rows="5" placeholder="2Z599F&#10;W1A52A&#10;LaserJet Pro 4001n"></textarea>
+        </div>
+
+        <div class="actions">
+          <button class="btn btn-primary" id="fetchBtn" type="button">Retrieve Images</button>
+          <button class="btn btn-secondary" id="clearBtn" type="button">Clear</button>
+        </div>
+
+        <div class="progress hidden" id="progress">
+          <div class="progress-bar" id="progressBar"></div>
+          <p id="progressText">Fetching images...</p>
+        </div>
+      </section>
+
+      <section class="panel results-panel">
+        <div class="results-header">
+          <h2>Results</h2>
+          <div class="summary" id="summary">Upload a file or enter product numbers to begin.</div>
+        </div>
+        <div class="results-grid" id="resultsGrid"></div>
+      </section>
+    </main>
+  </div>
+
+  <template id="resultCardTemplate">
+    <article class="result-card">
+      <div class="result-meta">
+        <h3 class="product-title"></h3>
+        <p class="product-number"></p>
+        <p class="product-source"></p>
+      </div>
+      <div class="image-gallery"></div>
+      <p class="result-error hidden"></p>
+    </article>
+  </template>
+
+  <script src="/assets/app.js"></script>
+</body>
+</html>
