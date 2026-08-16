@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
+import time
 from pathlib import Path
 from typing import Any
 
@@ -36,9 +38,100 @@ def _cert_tuple() -> tuple[str, str] | None:
 
 
 def _auth_tuple() -> tuple[str, str] | None:
+    """Credentials for httpx's `auth=` argument. Only used in 'basic' mode."""
+    if settings.hp_catalog_auth_mode != "basic":
+        return None
     if settings.hp_catalog_client_id and settings.hp_catalog_client_secret:
         return settings.hp_catalog_client_id, settings.hp_catalog_client_secret
     return None
+
+
+# Cached OAuth2 access token: (token, expires_at_monotonic).
+_token_cache: tuple[str, float] | None = None
+_token_lock = asyncio.Lock()
+
+
+async def _get_oauth_token(client: httpx.AsyncClient) -> str | None:
+    """Fetch and cache a client_credentials access token.
+
+    Cached because products are looked up concurrently — without this, every
+    product in a batch would mint its own token.
+    """
+    global _token_cache
+
+    if not settings.hp_catalog_token_url:
+        logger.error("HP_CATALOG_AUTH_MODE=oauth2 but HP_CATALOG_TOKEN_URL is not set")
+        return None
+
+    async with _token_lock:
+        now = time.monotonic()
+        if _token_cache and _token_cache[1] > now + 30:
+            return _token_cache[0]
+
+        data = {"grant_type": "client_credentials"}
+        if settings.hp_catalog_oauth_scope:
+            data["scope"] = settings.hp_catalog_oauth_scope
+
+        try:
+            response = await client.post(
+                settings.hp_catalog_token_url,
+                data=data,
+                auth=(settings.hp_catalog_client_id, settings.hp_catalog_client_secret),
+                headers={"Accept": "application/json"},
+            )
+        except (httpx.HTTPError, OSError) as exc:
+            logger.error("token request failed: %s %s", type(exc).__name__, exc)
+            return None
+
+        if response.status_code >= 400:
+            logger.error(
+                "token endpoint returned HTTP %s: %s",
+                response.status_code, response.text.strip()[:200],
+            )
+            return None
+
+        try:
+            payload = response.json()
+        except ValueError:
+            logger.error("token endpoint did not return JSON")
+            return None
+
+        token = payload.get("access_token") or payload.get("accessToken") or payload.get("token")
+        if not token:
+            logger.error("token endpoint response had no access_token field")
+            return None
+
+        try:
+            lifetime = float(payload.get("expires_in", 3600))
+        except (TypeError, ValueError):
+            lifetime = 3600.0
+
+        _token_cache = (token, time.monotonic() + lifetime)
+        logger.info("obtained catalog access token, valid %.0fs", lifetime)
+        return token
+
+
+async def _auth_headers(client: httpx.AsyncClient) -> dict[str, str]:
+    """Auth headers for the configured mode. Empty dict for 'basic'."""
+    mode = settings.hp_catalog_auth_mode
+
+    if mode == "basic":
+        return {}
+
+    if mode == "bearer":
+        value = settings.hp_catalog_api_key_value or settings.hp_catalog_client_secret
+        return {"Authorization": f"Bearer {value}"} if value else {}
+
+    if mode == "apikey":
+        value = settings.hp_catalog_api_key_value or settings.hp_catalog_client_id
+        return {settings.hp_catalog_api_key_header: value} if value else {}
+
+    if mode == "oauth2":
+        token = await _get_oauth_token(client)
+        return {"Authorization": f"Bearer {token}"} if token else {}
+
+    logger.error("unknown HP_CATALOG_AUTH_MODE=%r; falling back to basic", mode)
+    return {}
 
 
 def _build_request_body(product_number: str) -> dict[str, Any]:
@@ -112,6 +205,7 @@ async def fetch_catalog_images(
         "Accept": "application/json",
         "Content-Type": "application/json",
     }
+    headers.update(await _auth_headers(client))
 
     body = _build_request_body(product_number)
     # POST targets under HP_CATALOG_BASE_URL, e.g.
