@@ -2,3 +2,4 @@
 *.pem
 *.crt
 __pycache__/
+deploy/.instance
