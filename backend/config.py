@@ -11,7 +11,7 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 class Settings:
     hp_catalog_base_url: str = os.getenv(
         "HP_CATALOG_BASE_URL",
-        "https://hermesws.ext.hp.com/HermesWS/secure/v2",
+        "https://hpit-gw.hpcloud.hp.com/generic-router/api/hermes",
     )
     hp_catalog_requester_id: str = os.getenv("HP_CATALOG_REQUESTER_ID", "")
     hp_catalog_client_cert: str = os.getenv("HP_CATALOG_CLIENT_CERT", "")

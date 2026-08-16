@@ -111,6 +111,9 @@ async def fetch_catalog_images(
     }
 
     body = _build_request_body(product_number)
+    # POST targets under HP_CATALOG_BASE_URL, e.g.
+    #   https://hpit-gw.hpcloud.hp.com/generic-router/api/hermes/images
+    #   https://hpit-gw.hpcloud.hp.com/generic-router/api/hermes/productcontent
     endpoints = ("images", "productcontent")
 
     async def _try_endpoints(http_client: httpx.AsyncClient) -> dict[str, Any] | None:

@@ -44,10 +44,16 @@ HP's official product image API requires partner registration:
 3. Add credentials to `.env`:
 
 ```env
+HP_CATALOG_BASE_URL=https://hpit-gw.hpcloud.hp.com/generic-router/api/hermes
 HP_CATALOG_REQUESTER_ID=your_partner_id
 HP_CATALOG_CLIENT_CERT=/path/to/cert.pem
 HP_CATALOG_CLIENT_KEY=/path/to/key.pem
 ```
+
+Requests are POSTed to `<HP_CATALOG_BASE_URL>/<endpoint>`:
+
+- `https://hpit-gw.hpcloud.hp.com/generic-router/api/hermes/images`
+- `https://hpit-gw.hpcloud.hp.com/generic-router/api/hermes/productcontent`
 
 Without credentials, the app falls back to HP Shop search scraping.
 
