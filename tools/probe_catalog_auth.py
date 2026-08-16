@@ -77,16 +77,29 @@ def mask(value: str) -> str:
     return f"{value[:4]}…{value[-2:]} ({len(value)} chars)"
 
 
-def verdict(status: int) -> str:
+def classify(status: int, body: str) -> tuple[str, bool]:
+    """Return (description, credential_was_accepted).
+
+    Careful with 400 here. This gateway answers a request carrying NO
+    Authorization header with `400 {"error": "JWT Token is required."}` — that
+    is a rejection, not progress. An earlier version of this script treated
+    "anything but 401" as acceptance and so reported api-key headers (and even
+    sending no credentials at all) as working. They were simply being ignored.
+    """
+    lowered = body.lower()
+    if "jwt token is required" in lowered:
+        return "no JWT sent (credential ignored)", False
     if status == 401:
-        return "rejected"
+        return "rejected", False
+    if status == 400:
+        return "bad request", False
     if status == 403:
-        return "authenticated but not authorised"
+        return "authenticated, not authorised", True
     if status == 404:
-        return "auth OK, wrong path"
+        return "auth OK, wrong path", True
     if 200 <= status < 300:
-        return "*** ACCEPTED ***"
-    return "other"
+        return "*** ACCEPTED ***", True
+    return "other", False
 
 
 async def try_request(
@@ -96,16 +109,18 @@ async def try_request(
     headers: dict[str, str],
     body: dict,
     auth: tuple[str, str] | None = None,
-) -> int | None:
+) -> bool:
+    """POST once and report. Returns True only if the credential was accepted."""
     try:
         response = await client.post(url, json=body, headers=headers, auth=auth)
     except httpx.HTTPError as exc:
         detail = str(exc).strip() or type(exc).__name__
         print(f"  {label:38} -> ERROR {detail}")
-        return None
-    snippet = response.text.strip().replace("\n", " ")[:110]
-    print(f"  {label:38} -> {response.status_code} {verdict(response.status_code):28} {snippet}")
-    return response.status_code
+        return False
+    text = response.text.strip().replace("\n", " ")
+    description, accepted = classify(response.status_code, text)
+    print(f"  {label:38} -> {response.status_code} {description:30} {text[:100]}")
+    return accepted
 
 
 async def probe_token_endpoints(
@@ -221,35 +236,39 @@ async def main() -> int:
 
         accepted: list[str] = []
         for label, headers, auth in schemes:
-            status = await try_request(client, label, url, headers, body, auth)
-            if status is not None and status != 401:
-                accepted.append(f"{label} (HTTP {status})")
+            if await try_request(client, label, url, headers, body, auth):
+                accepted.append(label)
 
         token = await probe_token_endpoints(client, client_id, client_secret)
         if token:
             print("\n=== Retrying the API with that OAuth token ===")
-            status = await try_request(
+            if await try_request(
                 client,
                 "Bearer <oauth access_token>",
                 url,
                 {**json_headers, "Authorization": f"Bearer {token}"},
                 body,
-            )
-            if status is not None and status != 401:
-                accepted.append(f"OAuth2 bearer token (HTTP {status})")
+            ):
+                accepted.append("OAuth2 bearer token")
 
         print("\n" + "=" * 72)
         if accepted:
-            print("Schemes the gateway did NOT reject:")
+            print("Schemes the gateway ACCEPTED:")
             for item in accepted:
                 print(f"  - {item}")
             print("\nSet HP_CATALOG_AUTH_MODE in .env to match, then re-run 01-put-secrets.sh.")
         else:
-            print("Every scheme returned 401.")
-            print("The credentials are probably not provisioned for this gateway —")
-            print("they may be for the old hermesws.ext.hp.com endpoint. Ask your HP")
-            print("contact which gateway the client id/secret is registered against,")
-            print("and whether a separate token exchange is required.")
+            print("No scheme was accepted.")
+            print()
+            print("If the failures split like this:")
+            print('  - Authorization header sent  -> 401 "Invalid token."')
+            print('  - no Authorization header    -> 400 "JWT Token is required."')
+            print()
+            print("then the gateway wants a JWT bearer token, and your client id and")
+            print("secret are NOT that token — they have to be exchanged for one at an")
+            print("identity provider that is not hosted on this gateway.")
+            print()
+            print("Run tools/probe_catalog_jwt.py next to look for the issuer.")
         print("=" * 72)
     return 0
 
