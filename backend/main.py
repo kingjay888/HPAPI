@@ -1,3 +1,5 @@
+import logging
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
@@ -9,6 +11,13 @@ from pydantic import BaseModel, Field
 from .config import settings
 from .excel_parser import parse_product_list
 from .image_service import fetch_many_products, fetch_product_images
+
+# Without this, warnings from the hp_* modules never reach journalctl —
+# uvicorn only configures its own loggers, not application ones.
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    format="%(levelname)s [%(name)s] %(message)s",
+)
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = ROOT_DIR / "frontend"
@@ -42,6 +51,11 @@ async def health() -> dict:
         "status": "ok",
         "catalog_api_configured": settings.catalog_configured,
         "country": settings.hp_country_code,
+        "catalog_base_url": settings.hp_catalog_base_url,
+        "hp_shop_enabled": settings.hp_shop_enabled,
+        "request_timeout_seconds": settings.request_timeout_seconds,
+        "product_timeout_seconds": settings.product_timeout_seconds,
+        "max_concurrency": settings.max_concurrency,
     }
 
 

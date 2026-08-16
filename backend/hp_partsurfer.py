@@ -78,10 +78,12 @@ async def lookup_product(
     try:
         payload = await _get_json(client, path)
     except httpx.HTTPError as exc:
+        # Include the exception type: httpx timeouts stringify to "".
+        detail = str(exc).strip()
         return {
             "found": False,
             "query": query,
-            "error": str(exc),
+            "error": f"{type(exc).__name__}: {detail}" if detail else type(exc).__name__,
         }
 
     status = payload.get("Status", {})

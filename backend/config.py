@@ -7,6 +7,13 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() not in {"false", "0", "no", "off", ""}
+
+
 @dataclass(frozen=True)
 class Settings:
     hp_catalog_base_url: str = os.getenv(
@@ -25,7 +32,26 @@ class Settings:
         "PARTSURFER_BFF_URL",
         "https://partsurfer.hpcloud.hp.com/bff",
     )
-    request_timeout_seconds: float = float(os.getenv("REQUEST_TIMEOUT_SECONDS", "45"))
+
+    # Timeout for a SINGLE upstream HTTP call. Deliberately short: one product
+    # makes up to five upstream calls, so a large value multiplies into minutes
+    # of wall clock and the connection gets dropped by the browser or an
+    # intermediate proxy long before the response is ready.
+    request_timeout_seconds: float = float(os.getenv("REQUEST_TIMEOUT_SECONDS", "15"))
+
+    # Hard ceiling on all work for one product across every upstream it tries.
+    # Exceeding it produces a "timed out" result for that product instead of
+    # stalling the whole batch.
+    product_timeout_seconds: float = float(os.getenv("PRODUCT_TIMEOUT_SECONDS", "40"))
+
+    # How many products are looked up simultaneously. Higher finishes sooner but
+    # raises the chance HP rate-limits or blocks the source IP.
+    max_concurrency: int = int(os.getenv("MAX_CONCURRENCY", "5"))
+
+    # Set HP_SHOP_ENABLED=false to skip the HP Shop scrape entirely. Worth doing
+    # when HP blocks the host's IP range: there the scrape can only ever time
+    # out, so skipping it removes a guaranteed delay from every lookup.
+    hp_shop_enabled: bool = _env_bool("HP_SHOP_ENABLED", True)
 
     @property
     def catalog_requester_id(self) -> str:

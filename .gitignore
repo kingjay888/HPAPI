@@ -3,3 +3,5 @@
 *.crt
 __pycache__/
 deploy/.instance
+.DS_Store
+freedompaper.txt

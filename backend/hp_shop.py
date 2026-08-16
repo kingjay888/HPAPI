@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from typing import Any
 from urllib.parse import quote
@@ -9,6 +10,21 @@ import httpx
 
 from .config import settings
 from .hp_catalog import IMAGE_URL_PATTERN
+
+logger = logging.getLogger(__name__)
+
+
+def _describe(exc: Exception) -> str:
+    """Build a readable description of an httpx failure.
+
+    httpx timeout exceptions stringify to an empty string, so "HP Shop search
+    failed: " with nothing after it tells you nothing. Always include the
+    exception type — that is what separates a ConnectTimeout (no route, or the
+    source IP is blocked) from an HTTPStatusError (HP answered and said no).
+    """
+    text = str(exc).strip()
+    return f"{type(exc).__name__}: {text}" if text else type(exc).__name__
+
 
 BROWSER_HEADERS = {
     "User-Agent": (
@@ -86,10 +102,11 @@ async def fetch_shop_images(
         response = await client.get(search_url, headers=BROWSER_HEADERS, follow_redirects=True)
         response.raise_for_status()
     except httpx.HTTPError as exc:
+        logger.warning("HP Shop search failed for %s: %s", search_term, _describe(exc))
         return {
             "found": False,
             "images": [],
-            "error": f"HP Shop search failed: {exc}",
+            "error": f"HP Shop search failed ({_describe(exc)}).",
         }
 
     images, pdp_links = _extract_images_from_html(response.text)
@@ -101,8 +118,8 @@ async def fetch_shop_images(
             pdp_response = await client.get(pdp_url, headers=BROWSER_HEADERS, follow_redirects=True)
             pdp_response.raise_for_status()
             images, _ = _extract_images_from_html(pdp_response.text)
-        except httpx.HTTPError:
-            pass
+        except httpx.HTTPError as exc:
+            logger.warning("HP Shop product page %s failed: %s", pdp_url, _describe(exc))
 
     if images:
         return {
