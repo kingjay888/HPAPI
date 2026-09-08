@@ -43,19 +43,21 @@ HP's official product image API requires partner registration:
 2. Complete SSL certificate registration and IP whitelisting
 3. Add credentials to `.env`:
 
+Requests are POSTed to:
+
+- Token: `https://core.api.hp.com/hpid/oauth/v1/token` (client credentials)
+- Catalog: `https://hpit-gw.hpcloud.hp.com/generic-router/api/hermes/productcontent` (Bearer token)
+
 ```env
+HP_CATALOG_AUTH_MODE=oauth2
+HP_CATALOG_TOKEN_URL=https://core.api.hp.com/hpid/oauth/v1/token
+HP_CATALOG_OAUTH_SCOPE=
 HP_CATALOG_BASE_URL=https://hpit-gw.hpcloud.hp.com/generic-router/api/hermes
-HP_CATALOG_REQUESTER_ID=your_partner_id
-HP_CATALOG_CLIENT_CERT=/path/to/cert.pem
-HP_CATALOG_CLIENT_KEY=/path/to/key.pem
+HP_CATALOG_CLIENT_ID=your_client_id
+HP_CATALOG_CLIENT_SECRET=your_client_secret
 ```
 
-Requests are POSTed to `<HP_CATALOG_BASE_URL>/<endpoint>`:
-
-- `https://hpit-gw.hpcloud.hp.com/generic-router/api/hermes/images`
-- `https://hpit-gw.hpcloud.hp.com/generic-router/api/hermes/productcontent`
-
-Without credentials, the app falls back to HP Shop search scraping.
+If the token call returns “Scope is missing or does not match with product configuration,” set `HP_CATALOG_OAUTH_SCOPE` to the scope HP assigned to this client.
 
 ## API endpoints
 

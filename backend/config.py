@@ -26,17 +26,18 @@ class Settings:
     hp_catalog_client_id: str = os.getenv("HP_CATALOG_CLIENT_ID", "")
     hp_catalog_client_secret: str = os.getenv("HP_CATALOG_CLIENT_SECRET", "")
 
-    # How to authenticate to the catalog gateway. The old hermesws endpoint took
-    # HTTP Basic; the hpit-gw gateway answers Basic with 401 "Invalid token", so
-    # it wants something else. Run tools/probe_catalog_auth.py to find out which,
-    # then set this. One of: basic | bearer | apikey | oauth2
-    hp_catalog_auth_mode: str = os.getenv("HP_CATALOG_AUTH_MODE", "basic").strip().lower()
+    # How to authenticate to the catalog gateway. One of: oauth2 | basic | bearer | apikey
+    # hpit-gw expects a Bearer token from HP ID OAuth.
+    hp_catalog_auth_mode: str = os.getenv("HP_CATALOG_AUTH_MODE", "oauth2").strip().lower()
     # Header name used when auth mode is "apikey".
     hp_catalog_api_key_header: str = os.getenv("HP_CATALOG_API_KEY_HEADER", "x-api-key")
     # Which credential carries the key/token for apikey and bearer modes.
     hp_catalog_api_key_value: str = os.getenv("HP_CATALOG_API_KEY_VALUE", "")
     # Token endpoint for oauth2 client_credentials mode.
-    hp_catalog_token_url: str = os.getenv("HP_CATALOG_TOKEN_URL", "")
+    hp_catalog_token_url: str = os.getenv(
+        "HP_CATALOG_TOKEN_URL",
+        "https://core.api.hp.com/hpid/oauth/v1/token",
+    )
     hp_catalog_oauth_scope: str = os.getenv("HP_CATALOG_OAUTH_SCOPE", "")
     hp_country_code: str = os.getenv("HP_COUNTRY_CODE", "US")
     hp_language_code: str = os.getenv("HP_LANGUAGE_CODE", "en")

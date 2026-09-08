@@ -68,7 +68,11 @@ async def _get_oauth_token(client: httpx.AsyncClient) -> str | None:
         if _token_cache and _token_cache[1] > now + 30:
             return _token_cache[0]
 
-        data = {"grant_type": "client_credentials"}
+        data = {
+            "grant_type": "client_credentials",
+            "client_id": settings.hp_catalog_client_id,
+            "client_secret": settings.hp_catalog_client_secret,
+        }
         if settings.hp_catalog_oauth_scope:
             data["scope"] = settings.hp_catalog_oauth_scope
 
@@ -77,7 +81,10 @@ async def _get_oauth_token(client: httpx.AsyncClient) -> str | None:
                 settings.hp_catalog_token_url,
                 data=data,
                 auth=(settings.hp_catalog_client_id, settings.hp_catalog_client_secret),
-                headers={"Accept": "application/json"},
+                headers={
+                    "Accept": "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
             )
         except (httpx.HTTPError, OSError) as exc:
             logger.error("token request failed: %s %s", type(exc).__name__, exc)
@@ -206,12 +213,20 @@ async def fetch_catalog_images(
         "Content-Type": "application/json",
     }
     headers.update(await _auth_headers(client))
+    if settings.hp_catalog_auth_mode == "oauth2" and "Authorization" not in headers:
+        return {
+            "found": False,
+            "images": [],
+            "error": (
+                "Could not obtain an HP ID OAuth token. "
+                "Set HP_CATALOG_OAUTH_SCOPE to the scope HP assigned to this client."
+            ),
+        }
 
     body = _build_request_body(product_number)
-    # POST targets under HP_CATALOG_BASE_URL, e.g.
-    #   https://hpit-gw.hpcloud.hp.com/generic-router/api/hermes/images
-    #   https://hpit-gw.hpcloud.hp.com/generic-router/api/hermes/productcontent
-    endpoints = ("images", "productcontent")
+    # POST https://hpit-gw.hpcloud.hp.com/generic-router/api/hermes/productcontent
+    # after obtaining a Bearer token from HP ID OAuth.
+    endpoints = ("productcontent",)
 
     # Every endpoint attempt records why it failed. Without this the caller only
     # ever saw "No images returned", which cannot distinguish bad credentials
